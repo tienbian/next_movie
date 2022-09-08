@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "ZqfhZ/s3FW47UYOgUYJ93Nz2zop5d05H0o2vU0mQ3qY=",
+  "Source": "next_movie",
+  "BasePath": "_content/next_movie",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
