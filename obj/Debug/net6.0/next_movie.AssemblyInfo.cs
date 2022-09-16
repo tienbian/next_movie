@@ -10,6 +10,7 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.AspNetCore.Identity.UI.UIFrameworkAttribute("Bootstrap5")]
 [assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("60d62476-2d8b-4833-9cdf-0226cfc79aba")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("next_movie")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]

@@ -5,6 +5,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Identity.UI.Services;
+using System.Web;
 
 namespace nextMovie.Controllers
 {
@@ -15,12 +17,14 @@ namespace nextMovie.Controllers
         private readonly UserManager<ApplicationUser> userManager;
         private readonly RoleManager<IdentityRole> roleManager;
         private readonly IConfiguration _configuration;
+        private readonly IEmailSender _emailSender;
 
-        public AuthenticateController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        public AuthenticateController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration, IEmailSender sender)
         {
             this.userManager = userManager;
             this.roleManager = roleManager;
             _configuration = configuration;
+            _emailSender = sender;
         }
 
         [HttpPost]
@@ -28,7 +32,17 @@ namespace nextMovie.Controllers
         public async Task<IActionResult> Login([FromBody] Login model)
         {
             var user = await userManager.FindByNameAsync(model.Username);
-            if (user != null && await userManager.CheckPasswordAsync(user, model.Password))
+            bool checkPassword = (user != null) && await userManager.CheckPasswordAsync(user, model.Password);
+            if (checkPassword == false)
+            {
+                ModelState.AddModelError(nameof(model.Password), "Password is incorect");
+            }
+            bool emailStatus = (user != null) && await userManager.IsEmailConfirmedAsync(user);
+            if (emailStatus == false)
+            {
+                ModelState.AddModelError(nameof(model.Email), "Email is unconfirmed, please confirm it first");
+            }
+            if (user != null && checkPassword && emailStatus)
             {
                 var userRoles = await userManager.GetRolesAsync(user);
 
@@ -59,7 +73,7 @@ namespace nextMovie.Controllers
                     expiration = token.ValidTo
                 });
             }
-            return Unauthorized();
+            return Unauthorized(ModelState);
         }
 
         [HttpPost]
@@ -74,7 +88,9 @@ namespace nextMovie.Controllers
             {
                 Email = model.Email,
                 SecurityStamp = Guid.NewGuid().ToString(),
-                UserName = model.Username
+                UserName = model.Username,
+                DOB = model.DOB.ToUniversalTime(),
+                Name = model.FullName
             };
             var result = await userManager.CreateAsync(user, model.Password);
             if (!result.Succeeded)
@@ -86,6 +102,46 @@ namespace nextMovie.Controllers
             {
                 await userManager.AddToRoleAsync(user, UserRoles.User);
             }
+            var code = await userManager.GenerateEmailConfirmationTokenAsync(user);
+            string codeHtmlVersion = HttpUtility.UrlEncode(code);
+            await _emailSender.SendEmailAsync(user.Email, "confirm email", codeHtmlVersion);
+            return Ok();
+        }
+
+        [HttpPost]
+        [Route("sign_up_validate")]
+        public async Task<IActionResult> SignUpValidate([FromBody] RegisterValidate model)
+        {
+            var userExists = await userManager.FindByNameAsync(model.Username);
+            if (userExists == null)
+                return NotFound();
+
+            ApplicationUser user = new ApplicationUser()
+            {
+                Email = model.Email,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                UserName = model.Username,
+                Name = model.FullName
+            };
+            var result = await userManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded)
+                return StatusCode(StatusCodes.Status400BadRequest, new Response { Status = "Error", Message = "Username or Password wrong" });
+
+            return Ok();
+        }
+
+        [HttpGet]
+        [Route("sign_up_active")]
+        public async Task<IActionResult> SignUpActive(string code, string email)
+        {
+            var userExists = await userManager.FindByEmailAsync(email);
+            if (userExists == null)
+                return NotFound();
+
+            var result = await userManager.ConfirmEmailAsync(userExists, code);
+            if (!result.Succeeded)
+                return StatusCode(StatusCodes.Status400BadRequest, new Response { Status = "Error", Message = "Code wrong" });
+
             return Ok();
         }
     }
